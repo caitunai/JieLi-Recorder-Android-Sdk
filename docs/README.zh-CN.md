@@ -1,10 +1,29 @@
-# JieLi Recorder Android SDK
+# JieLi Recorder Android SDK 接入文档
 
-Android BLE recorder SDK for scanning devices, connecting to peripherals, browsing recorder files, downloading and deleting files, sending custom record commands, querying device state, configuring key/touch behavior, receiving realtime PCM audio, and performing OTA upgrades.
+本文档介绍如何在 Android 应用中集成并使用 `com.jieli.sdk.ble.recorder` BLE 录音 SDK。
 
-## Maven Dependency
+当前 SDK 支持：
 
-Add the SDK dependency in your Android app module:
+- BLE 扫描与停止扫描
+- BLE 外设连接与断开连接
+- 扫描结果回调
+- 电量变化回调
+- 文件列表读取与刷新
+- 文件下载、下载进度与下载统计
+- 文件删除
+- 设备时间同步
+- 自定义录音开始与停止
+- 录音状态、存储空间、录音文件数量查询
+- 按键/触控行为设置与软触发
+- 实时 PCM 音频流回调
+- OTA 升级
+- 错误与升级未完成提醒
+
+## 1. Maven 依赖
+
+SDK 依赖已经迁移到 Maven。
+
+在应用模块中添加：
 
 ```kotlin
 dependencies {
@@ -12,11 +31,11 @@ dependencies {
 }
 ```
 
-If your project uses a private Maven repository, configure the repository first and then add the dependency above.
+如果你的项目使用私有 Maven 仓库，请先在 Gradle 中配置对应仓库，再添加上面的依赖。
 
-## Package Name
+## 2. 包名与导入
 
-Import the SDK from:
+SDK 使用的包名为：
 
 ```kotlin
 import com.jieli.sdk.ble.recorder.BLECallback
@@ -32,32 +51,15 @@ import com.jieli.sdk.ble.recorder.BLERecordState
 import com.jieli.sdk.ble.recorder.ConnectionCode
 ```
 
-## Features
+## 3. 权限要求
 
-- BLE device scan and stop-scan callbacks
-- Device connection and disconnection
-- Device information reporting during scan
-- Battery status update callbacks
-- Recorder file listing and refresh
-- File download with progress, statistics, and output path
-- File deletion for one or multiple files
-- Device time synchronization
-- Custom record start and stop commands
-- Record state, storage size, and record file count queries
-- Key/touch behavior configuration and software trigger
-- Realtime PCM audio callbacks
-- OTA firmware upgrade
-- Generic SDK error reporting
-
-## Required Permissions
-
-At minimum, request these permissions:
+至少需要申请以下权限：
 
 - `android.permission.ACCESS_FINE_LOCATION`
-- `android.permission.BLUETOOTH_SCAN` on Android 12+
-- `android.permission.BLUETOOTH_CONNECT` on Android 12+
+- Android 12 及以上：`android.permission.BLUETOOTH_SCAN`
+- Android 12 及以上：`android.permission.BLUETOOTH_CONNECT`
 
-Example:
+示例：
 
 ```kotlin
 private fun requiredPermissions(): Array<String> {
@@ -72,18 +74,18 @@ private fun requiredPermissions(): Array<String> {
 }
 ```
 
-## Core Entry Point
+## 4. BLEManager 的使用方式
 
-The SDK entry point is `BLEManager`.
+SDK 的核心入口是 `BLEManager`。
 
-Recommended usage:
+推荐做法：
 
-- create one shared `BLEManager` instance
-- register screens with `addCallback`
-- remove callbacks in `onDestroy`
-- keep a single manager across scan and detail screens
+- 整个相关业务页面共用一个 `BLEManager`
+- 页面进入时注册回调
+- 页面销毁时移除回调
+- 扫描页和详情页不要各自创建独立实例
 
-Example singleton holder:
+示例：
 
 ```kotlin
 object BleManagerHolder {
@@ -107,11 +109,11 @@ object BleManagerHolder {
 }
 ```
 
-## Implement BLECallback
+## 5. 实现 BLECallback
 
-Your application layer should implement `BLECallback`.
+应用层需要实现 `BLECallback`。
 
-Current callback surface:
+当前回调接口包括：
 
 ```java
 void onDiscovery(BLEDevice device);
@@ -137,7 +139,7 @@ void onRealtimeAudioReceived(byte[] audio);
 void onRealtimeAudioStopped();
 ```
 
-Minimal skeleton:
+Kotlin 空实现骨架：
 
 ```kotlin
 class MyBleActivity : AppCompatActivity(), BLECallback {
@@ -177,9 +179,53 @@ class MyBleActivity : AppCompatActivity(), BLECallback {
 }
 ```
 
-## BLEDevice Fields
+## 6. 扫描 BLE 外设
 
-`BLEDevice` currently exposes:
+开始扫描：
+
+```kotlin
+bleManager?.startScan()
+```
+
+停止扫描：
+
+```kotlin
+bleManager?.stopScan()
+```
+
+接收扫描结果：
+
+```kotlin
+private val devices = LinkedHashMap<String, BLEDevice>()
+
+override fun onDiscovery(device: BLEDevice) {
+    runOnUiThread {
+        val mac = device.mac ?: return@runOnUiThread
+        devices[mac] = device
+        // 刷新列表
+    }
+}
+```
+
+停止扫描回调：
+
+```kotlin
+override fun onScanStopped() {
+    runOnUiThread {
+        // 恢复按钮状态
+    }
+}
+```
+
+推荐：
+
+- 每次扫描前清空旧列表
+- 通过 MAC 去重
+- 在 `onScanStopped()` 中恢复“开始扫描”按钮
+
+## 7. 扫描列表中展示的信息
+
+`BLEDevice` 可直接使用的字段包括：
 
 ```java
 public String id;
@@ -192,72 +238,47 @@ public int version;
 public String versionName;
 ```
 
-Typical scan UI fields:
+典型展示项：
 
-- device name
-- MAC address
-- device ID
-- firmware version
-- battery percentage
-- charging status
-- fully charged status
-- connection status
+- 设备名称
+- MAC 地址
+- 设备 ID
+- 固件版本
+- 电量百分比
+- 是否充电
+- 是否已充满
+- 连接状态
 
-## Scan Devices
+## 8. 电量变化
 
-Start scan:
-
-```kotlin
-bleManager?.startScan()
-```
-
-Stop scan:
+当电量变化时会触发：
 
 ```kotlin
-bleManager?.stopScan()
-```
-
-Handle scan callbacks:
-
-```kotlin
-private val devices = LinkedHashMap<String, BLEDevice>()
-
-override fun onDiscovery(device: BLEDevice) {
+override fun onBatteryChange(device: BLEDevice) {
     runOnUiThread {
         val mac = device.mac ?: return@runOnUiThread
+        device.isChargedFull = device.charging && device.batteryPower >= 100
         devices[mac] = device
-        // update list UI
-    }
-}
-
-override fun onScanStopped() {
-    runOnUiThread {
-        // restore scan button state
+        // 刷新显示
     }
 }
 ```
 
-Recommended behavior:
+## 9. 连接与断开连接
 
-- clear previous results before a new scan
-- deduplicate by MAC address
-- re-enable the start button after `onScanStopped()`
-
-## Connect And Disconnect
-
-Connect:
+连接设备：
 
 ```kotlin
 bleManager?.connect(device)
 ```
 
-Disconnect:
+断开设备：
 
 ```kotlin
 bleManager?.disconnect(device)
 ```
 
-Monitor state:
+监听连接状态：
 
 ```kotlin
 override fun onConnectionChange(device: BLEDevice, status: ConnectionCode) {
@@ -273,48 +294,48 @@ override fun onConnectionChange(device: BLEDevice, status: ConnectionCode) {
 }
 ```
 
-## File List
+## 10. 文件列表读取
 
-Refresh from the beginning:
+从头刷新文件列表：
 
 ```kotlin
 bleManager?.retrieveFilesFromStart()
 ```
 
-Load more:
+继续读取更多文件：
 
 ```kotlin
 bleManager?.retrieveFiles()
 ```
 
-Limit total retrieval:
+限制最多读取数量：
 
 ```kotlin
 bleManager?.setMaxRetrieveFilesCount(200)
 ```
 
-Receive files:
+接收文件列表：
 
 ```kotlin
 override fun onFilesRetrieved(files: List<BLEFile>) {
     runOnUiThread {
         files.forEach { file ->
             val name = file.name ?: return@forEach
-            // store in map keyed by name
+            // 使用文件名作为 key 保存
         }
     }
 }
 ```
 
-## Download Files
+## 11. 文件下载
 
-Download by filename:
+按文件名下载：
 
 ```kotlin
 bleManager?.downloadFile(device, filename)
 ```
 
-Download to a custom path:
+下载到指定路径：
 
 ```kotlin
 bleManager?.downloadFileToPath(
@@ -324,7 +345,7 @@ bleManager?.downloadFileToPath(
 )
 ```
 
-Download callback events:
+下载回调事件：
 
 - `BEGIN`
 - `PROGRESS`
@@ -332,7 +353,7 @@ Download callback events:
 - `CANCEL`
 - `ERROR`
 
-Example:
+示例：
 
 ```kotlin
 override fun onFileDownloadUpdate(device: BLEDevice, event: BLEFileDownloadEvent) {
@@ -347,18 +368,16 @@ override fun onFileDownloadUpdate(device: BLEDevice, event: BLEFileDownloadEvent
 }
 ```
 
-Available download statistics on finish:
+下载完成后可获取：
 
 - `packages`
 - `bytesCount`
 - `duration`
 - `path`
 
-## Share Downloaded Files
+## 12. 文件分享
 
-Use `BLEFileDownloadEvent.path` together with `FileProvider`.
-
-Example:
+下载完成后可使用 `BLEFileDownloadEvent.path` 配合 `FileProvider` 分享文件：
 
 ```kotlin
 private fun shareDownloadedFile(event: BLEFileDownloadEvent) {
@@ -377,20 +396,20 @@ private fun shareDownloadedFile(event: BLEFileDownloadEvent) {
         putExtra(Intent.EXTRA_SUBJECT, file.name)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    startActivity(Intent.createChooser(shareIntent, "Share file"))
+    startActivity(Intent.createChooser(shareIntent, "分享文件"))
 }
 ```
 
-## Delete Files
+## 13. 文件删除
 
-Delete one or multiple files:
+删除一个或多个文件：
 
 ```kotlin
 bleManager?.deleteFile(device, listOf("A001.ogg"))
 bleManager?.deleteFile(device, listOf("A001.ogg", "A002.ogg"))
 ```
 
-Handle deletion:
+回调处理：
 
 ```kotlin
 override fun onFileDeleteUpdate(device: BLEDevice, event: BLEFileDeleteEvent) {
@@ -403,62 +422,62 @@ override fun onFileDeleteUpdate(device: BLEDevice, event: BLEFileDeleteEvent) {
 }
 ```
 
-## Time Sync
+## 14. 同步时间
 
 ```kotlin
 bleManager?.syncTime(device)
 ```
 
-Result:
+结果：
 
 ```kotlin
 override fun onTimeSynced(device: BLEDevice, success: Boolean) {
-    // update UI
+    // 更新 UI
 }
 ```
 
-## Custom Record Control
+## 15. 自定义录音控制
 
-Start custom record:
+开启自定义录音：
 
 ```kotlin
 bleManager?.startCustomRecord(device)
 ```
 
-Stop custom record:
+停止自定义录音：
 
 ```kotlin
 bleManager?.stopCustomRecord(device)
 ```
 
-Callbacks:
+结果回调：
 
 ```kotlin
 override fun onRecordStart(device: BLEDevice, started: Boolean) = Unit
 override fun onRecordStop(device: BLEDevice, stopped: Boolean) = Unit
 ```
 
-## Query Device State
+## 16. 查询设备状态
 
-Query record state:
+查询录音状态：
 
 ```kotlin
 bleManager?.queryRecordState(device)
 ```
 
-Query storage size:
+查询存储空间：
 
 ```kotlin
 bleManager?.queryStorageSize(device)
 ```
 
-Query record file count:
+查询录音文件数量：
 
 ```kotlin
 bleManager?.queryRecordFiles(device)
 ```
 
-Callbacks:
+结果回调：
 
 ```kotlin
 override fun onRecordStateUpdate(device: BLEDevice, state: BLERecordState) = Unit
@@ -466,23 +485,21 @@ override fun onStorageSizeUpdate(device: BLEDevice, available: Int, total: Int) 
 override fun onRecordFilesCountUpdate(device: BLEDevice, fileCount: Int) = Unit
 ```
 
-## Opus Frame Size
-
-Set and get the Opus frame size used by the SDK download/transcoding flow:
+## 17. Opus 帧长设置
 
 ```kotlin
 bleManager?.setOpusFrameSize(40)
 val frameSize = bleManager?.getOpusFrameSize()
 ```
 
-Common values:
+常用值：
 
 - `40`
 - `80`
 
-## Key/Touch Behavior
+## 18. 按键/触控行为
 
-Configure key/touch behavior:
+设置按键行为：
 
 ```kotlin
 val behavior = BLEKeyTouchBehavior(
@@ -493,13 +510,13 @@ val behavior = BLEKeyTouchBehavior(
 bleManager?.setKeyTouchBehaviorEvent(device, behavior)
 ```
 
-Emit a software event:
+软触发按键事件：
 
 ```kotlin
 bleManager?.emitKeyTouchBehaviorEvent(device, behavior)
 ```
 
-Callbacks:
+回调：
 
 ```kotlin
 override fun onKeyTouchBehaviorUpdate(
@@ -511,17 +528,17 @@ override fun onKeyTouchBehaviorUpdate(
 override fun onKeyTouchEmitted(device: BLEDevice, isSuccess: Boolean) = Unit
 ```
 
-## Realtime PCM Audio
+## 19. 实时 PCM 音频流
 
-The SDK now decodes Opus audio to raw PCM before delivering it to the application.
+SDK 现在会先把 Opus 解码成原始 PCM，再把 PCM 数据回调给应用层。
 
-Callback flow:
+回调时序：
 
 - `onRealtimeAudioStarted()`
-- one or more `onRealtimeAudioReceived(byte[] audio)`
+- 多次 `onRealtimeAudioReceived(byte[] audio)`
 - `onRealtimeAudioStopped()`
 
-Callback definitions:
+接口定义：
 
 ```java
 void onRealtimeAudioStarted();
@@ -529,15 +546,15 @@ void onRealtimeAudioReceived(byte[] audio);
 void onRealtimeAudioStopped();
 ```
 
-Recommended usage:
+推荐做法：
 
-- show stream start and stop status in UI
-- append each PCM chunk to a `.pcm` cache file
-- close the output stream on stop
-- share the final file if it is not empty
-- convert PCM to WAV if a standard playable container is required
+- 开始时显示状态
+- 接收时把 PCM 数据追加写入 `.pcm` 文件
+- 结束时关闭输出流
+- 如果文件非空则自动分享
+- 如果需要更强兼容性，可在应用层把 PCM 转成 WAV 再分享
 
-Example:
+示例：
 
 ```kotlin
 private val realtimeAudioLock = Any()
@@ -577,27 +594,27 @@ override fun onRealtimeAudioStopped() {
         realtimeAudioBytesReceived = 0L
     }
     if (fileToShare != null && fileToShare.exists() && totalSize > 0L) {
-        // share via FileProvider
+        // 使用 FileProvider 分享
     }
 }
 ```
 
-## OTA Upgrade
+## 20. OTA 升级
 
-Start OTA:
+启动 OTA：
 
 ```kotlin
 bleManager?.startOTA(device, firmwareBytes)
 ```
 
-Typical flow:
+典型流程：
 
-1. choose a firmware file
-2. read all bytes
-3. call `startOTA(device, fileBytes)`
-4. update UI from `onOTAUpdate`
+1. 选择固件文件
+2. 读取完整字节数组
+3. 调用 `startOTA(device, fileBytes)`
+4. 通过 `onOTAUpdate` 更新 UI
 
-Example:
+示例：
 
 ```kotlin
 override fun onOTAUpdate(device: BLEDevice, event: BLEOTAEvent) {
@@ -613,9 +630,9 @@ override fun onOTAUpdate(device: BLEDevice, event: BLEOTAEvent) {
 }
 ```
 
-## Errors
+## 21. 错误处理
 
-Generic SDK errors arrive through:
+通用错误回调：
 
 ```kotlin
 override fun onError(device: BLEDevice, errorCode: BLEErrorCode) {
@@ -624,24 +641,24 @@ override fun onError(device: BLEDevice, errorCode: BLEErrorCode) {
 }
 ```
 
-Upgrade reminder:
+升级未完成提醒：
 
 ```kotlin
 override fun onUpgradeUnfinished(device: BLEDevice) {
-    // prompt user to continue upgrade
+    // 提示用户继续升级
 }
 ```
 
-## Integration Notes
+## 22. 接入建议
 
-- Keep one shared `BLEManager` across related screens
-- Remove callbacks when screens are destroyed
-- Filter device-specific callbacks by MAC when needed
-- Prefer `retrieveFilesFromStart()` for a full refresh
-- Use `BLEFileDownloadEvent.path` after download completion
-- Keep a dedicated output stream for realtime PCM audio until `onRealtimeAudioStopped()`
-- Use `FileProvider` for sharing downloaded or realtime-generated files
+- 扫描页和详情页共用一个 `BLEManager`
+- 页面销毁时及时移除回调
+- 多设备场景下按 MAC 过滤设备相关回调
+- 文件完整刷新优先使用 `retrieveFilesFromStart()`
+- 下载完成后优先使用 `BLEFileDownloadEvent.path`
+- 实时 PCM 音频请保持单独的输出流，并在 `onRealtimeAudioStopped()` 后统一关闭
+- 分享下载文件或实时音频文件时统一使用 `FileProvider`
 
-## Chinese Documentation
+## 23. 英文文档
 
-For a Chinese integration guide, see [docs/README.zh-CN.md](docs/README.zh-CN.md).
+英文版说明请查看仓库根目录的 [README.md](../README.md)。
