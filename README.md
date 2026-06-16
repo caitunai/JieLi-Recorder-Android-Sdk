@@ -2,6 +2,8 @@
 
 Android BLE recorder SDK for scanning devices, connecting to peripherals, browsing recorder files, downloading and deleting files, sending custom record commands, querying device state, configuring key/touch behavior, receiving realtime PCM audio, and performing OTA upgrades.
 
+[中文文档](docs/README.zh-CN.md) | [iOS SDK](https://github.com/caitunai/JieLi-Recorder-iOS-Sdk)
+
 ## Maven Dependency
 
 Add the SDK dependency in your Android app module:
