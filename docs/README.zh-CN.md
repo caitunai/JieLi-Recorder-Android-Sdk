@@ -27,7 +27,7 @@ SDK 依赖已经迁移到 Maven。
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.0")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.1")
 }
 ```
 
@@ -132,6 +132,7 @@ void onStorageSizeUpdate(BLEDevice device, int available, int total);
 void onRecordFilesCountUpdate(BLEDevice device, int fileCount);
 void onKeyTouchBehaviorUpdate(BLEDevice device, boolean isSuccess, String errorMessage);
 void onKeyTouchEmitted(BLEDevice device, boolean isSuccess);
+void onKeyTouchReceived(BLEDevice device, BLEKeyTouchBehavior behavior);
 void onError(BLEDevice device, BLEErrorCode errorCode);
 void onUpgradeUnfinished(BLEDevice device);
 void onRealtimeAudioStarted();
@@ -171,6 +172,7 @@ class MyBleActivity : AppCompatActivity(), BLECallback {
     override fun onRecordFilesCountUpdate(device: BLEDevice, fileCount: Int) = Unit
     override fun onKeyTouchBehaviorUpdate(device: BLEDevice, isSuccess: Boolean, errorMessage: String) = Unit
     override fun onKeyTouchEmitted(device: BLEDevice, isSuccess: Boolean) = Unit
+    override fun onKeyTouchReceived(device: BLEDevice, behavior: BLEKeyTouchBehavior) = Unit
     override fun onError(device: BLEDevice, errorCode: BLEErrorCode) = Unit
     override fun onUpgradeUnfinished(device: BLEDevice) = Unit
     override fun onRealtimeAudioStarted() = Unit
@@ -508,6 +510,11 @@ val behavior = BLEKeyTouchBehavior(
     behavior = BLEKeyTouchBehavior.START_RECORD
 )
 bleManager?.setKeyTouchBehaviorEvent(device, behavior)
+```
+
+查询按键/触控设置:
+```kotlin
+bleManager?.queryKeyTouchBehavior(device)
 ```
 
 软触发按键事件：
