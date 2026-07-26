@@ -17,6 +17,7 @@
 - 按键/触控行为设置与软触发
 - 实时 PCM 音频流回调
 - OTA 升级
+- 设备绑定与验证（HMAC-SHA256）
 - 错误与升级未完成提醒
 
 ## 1. Maven 依赖
@@ -40,6 +41,7 @@ SDK 使用的包名为：
 ```kotlin
 import com.jieli.sdk.ble.recorder.BLECallback
 import com.jieli.sdk.ble.recorder.BLEDevice
+import com.jieli.sdk.ble.recorder.BLEDeviceBindingState
 import com.jieli.sdk.ble.recorder.BLEErrorCode
 import com.jieli.sdk.ble.recorder.BLEFile
 import com.jieli.sdk.ble.recorder.BLEFileDeleteEvent
@@ -138,6 +140,7 @@ void onUpgradeUnfinished(BLEDevice device);
 void onRealtimeAudioStarted();
 void onRealtimeAudioReceived(byte[] audio);
 void onRealtimeAudioStopped();
+void onDeviceBindingStateChanged(BLEDevice device, BLEDeviceBindingState state);
 ```
 
 Kotlin 空实现骨架：
@@ -178,6 +181,7 @@ class MyBleActivity : AppCompatActivity(), BLECallback {
     override fun onRealtimeAudioStarted() = Unit
     override fun onRealtimeAudioReceived(audio: ByteArray) = Unit
     override fun onRealtimeAudioStopped() = Unit
+    override fun onDeviceBindingStateChanged(device: BLEDevice, state: BLEDeviceBindingState) = Unit
 }
 ```
 
@@ -637,7 +641,67 @@ override fun onOTAUpdate(device: BLEDevice, event: BLEOTAEvent) {
 }
 ```
 
-## 21. 错误处理
+## 21. 设备绑定与验证
+
+SDK 支持通过 HMAC-SHA256 算法进行设备绑定验证，确保连接的设备身份合法。
+
+### BLEDeviceBindingState 状态说明
+
+| 状态值 | 说明 |
+|--------|------|
+| `UNBOUND` (0) | 设备未绑定 |
+| `BOUND` (1) | 设备已绑定 |
+| `UNKNOWN` (2) | 绑定状态未知 |
+| `VERIFIED` (3) | 设备已验证通过 |
+| `NOT_VERIFIED` (4) | 设备验证失败/未验证 |
+
+### 查询设备绑定状态
+
+```kotlin
+bleManager?.getDeviceBindingState(device)
+```
+
+### 首次绑定设备
+
+在设备首次连接时设置绑定密钥：
+
+```kotlin
+val key = "your-secret-key".toByteArray(Charsets.UTF_8)
+bleManager?.bindOrVerifyDevice(device, key)
+```
+
+### 验证设备绑定
+
+使用密钥验证已绑定的设备：
+
+```kotlin
+val key = "your-secret-key".toByteArray(Charsets.UTF_8)
+bleManager?.verifyDeviceBinding(device, key)
+```
+
+### 绑定状态变更回调
+
+```kotlin
+override fun onDeviceBindingStateChanged(device: BLEDevice, state: BLEDeviceBindingState) {
+    runOnUiThread {
+        when (state) {
+            BLEDeviceBindingState.UNBOUND -> { /* 设备未绑定 */ }
+            BLEDeviceBindingState.BOUND -> { /* 设备已绑定 */ }
+            BLEDeviceBindingState.VERIFIED -> { /* 验证通过 */ }
+            BLEDeviceBindingState.NOT_VERIFIED -> { /* 验证失败 */ }
+            BLEDeviceBindingState.UNKNOWN -> { /* 状态未知 */ }
+        }
+    }
+}
+```
+
+### 使用场景
+
+1. **首次连接设备**：调用 `bindOrVerifyDevice()` 设置绑定密钥
+2. **后续连接验证**：调用 `verifyDeviceBinding()` 验证设备身份
+3. **状态监控**：通过 `onDeviceBindingStateChanged()` 监听绑定状态变化
+
+## 22. 错误处理
 
 通用错误回调：
 
@@ -656,7 +720,7 @@ override fun onUpgradeUnfinished(device: BLEDevice) {
 }
 ```
 
-## 22. 接入建议
+## 23. 接入建议
 
 - 扫描页和详情页共用一个 `BLEManager`
 - 页面销毁时及时移除回调
@@ -666,6 +730,6 @@ override fun onUpgradeUnfinished(device: BLEDevice) {
 - 实时 PCM 音频请保持单独的输出流，并在 `onRealtimeAudioStopped()` 后统一关闭
 - 分享下载文件或实时音频文件时统一使用 `FileProvider`
 
-## 23. 英文文档
+## 24. 英文文档
 
 英文版说明请查看仓库根目录的 [README.md](../README.md)。

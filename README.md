@@ -23,6 +23,7 @@ Import the SDK from:
 ```kotlin
 import com.jieli.sdk.ble.recorder.BLECallback
 import com.jieli.sdk.ble.recorder.BLEDevice
+import com.jieli.sdk.ble.recorder.BLEDeviceBindingState
 import com.jieli.sdk.ble.recorder.BLEErrorCode
 import com.jieli.sdk.ble.recorder.BLEFile
 import com.jieli.sdk.ble.recorder.BLEFileDeleteEvent
@@ -49,6 +50,7 @@ import com.jieli.sdk.ble.recorder.ConnectionCode
 - Key/touch behavior configuration and software trigger
 - Realtime PCM audio callbacks
 - OTA firmware upgrade
+- Device binding and verification (HMAC-SHA256)
 - Generic SDK error reporting
 
 ## Required Permissions
@@ -138,6 +140,7 @@ void onUpgradeUnfinished(BLEDevice device);
 void onRealtimeAudioStarted();
 void onRealtimeAudioReceived(byte[] audio);
 void onRealtimeAudioStopped();
+void onDeviceBindingStateChanged(BLEDevice device, BLEDeviceBindingState state);
 ```
 
 Minimal skeleton:
@@ -178,6 +181,7 @@ class MyBleActivity : AppCompatActivity(), BLECallback {
     override fun onRealtimeAudioStarted() = Unit
     override fun onRealtimeAudioReceived(audio: ByteArray) = Unit
     override fun onRealtimeAudioStopped() = Unit
+    override fun onDeviceBindingStateChanged(device: BLEDevice, state: BLEDeviceBindingState) = Unit
 }
 ```
 
@@ -621,6 +625,66 @@ override fun onOTAUpdate(device: BLEDevice, event: BLEOTAEvent) {
     }
 }
 ```
+
+## Device Binding and Verification
+
+The SDK supports device binding verification using HMAC-SHA256 algorithm to ensure the connected device is authentic.
+
+### BLEDeviceBindingState
+
+| State | Description |
+|-------|-------------|
+| `UNBOUND` (0) | Device is not bound |
+| `BOUND` (1) | Device is bound |
+| `UNKNOWN` (2) | Binding state is unknown |
+| `VERIFIED` (3) | Device verification passed |
+| `NOT_VERIFIED` (4) | Device verification failed |
+
+### Query Device Binding State
+
+```kotlin
+bleManager?.getDeviceBindingState(device)
+```
+
+### Bind Device (First Connection)
+
+Set binding key when connecting to device for the first time:
+
+```kotlin
+val key = "your-secret-key".toByteArray(Charsets.UTF_8)
+bleManager?.bindOrVerifyDevice(device, key)
+```
+
+### Verify Device Binding
+
+Verify a previously bound device using the key:
+
+```kotlin
+val key = "your-secret-key".toByteArray(Charsets.UTF_8)
+bleManager?.verifyDeviceBinding(device, key)
+```
+
+### Binding State Change Callback
+
+```kotlin
+override fun onDeviceBindingStateChanged(device: BLEDevice, state: BLEDeviceBindingState) {
+    runOnUiThread {
+        when (state) {
+            BLEDeviceBindingState.UNBOUND -> { /* Device not bound */ }
+            BLEDeviceBindingState.BOUND -> { /* Device bound */ }
+            BLEDeviceBindingState.VERIFIED -> { /* Verification passed */ }
+            BLEDeviceBindingState.NOT_VERIFIED -> { /* Verification failed */ }
+            BLEDeviceBindingState.UNKNOWN -> { /* State unknown */ }
+        }
+    }
+}
+```
+
+### Usage Scenarios
+
+1. **First connection**: Call `bindOrVerifyDevice()` to set the binding key
+2. **Subsequent connections**: Call `verifyDeviceBinding()` to authenticate the device
+3. **State monitoring**: Listen to `onDeviceBindingStateChanged()` for binding state changes
 
 ## Errors
 
