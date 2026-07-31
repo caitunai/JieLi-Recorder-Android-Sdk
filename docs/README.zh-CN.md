@@ -347,7 +347,8 @@ bleManager?.downloadFile(device, filename)
 bleManager?.downloadFileToPath(
     device = device,
     filename = filename,
-    path = File(cacheDir, filename).absolutePath
+    path = File(cacheDir, filename).absolutePath,
+    offset = 256
 )
 ```
 
