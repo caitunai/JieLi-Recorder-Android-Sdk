@@ -10,7 +10,7 @@ Add the SDK dependency in your Android app module:
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.5")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.6")
 }
 ```
 
@@ -362,6 +362,12 @@ Available download statistics on finish:
 - `bytesCount`
 - `duration`
 - `path`
+
+## Cancel Download
+
+```kotlin
+bleManager?.cancelDownloadFile(device)
+```
 
 ## Share Downloaded Files
 

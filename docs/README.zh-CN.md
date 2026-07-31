@@ -28,7 +28,7 @@ SDK 依赖已经迁移到 Maven。
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.5")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.6")
 }
 ```
 
@@ -381,6 +381,12 @@ override fun onFileDownloadUpdate(device: BLEDevice, event: BLEFileDownloadEvent
 - `bytesCount`
 - `duration`
 - `path`
+
+### 取消下载
+
+```kotlin
+bleManager?.cancelDownloadFile(device)
+```
 
 ## 12. 文件分享
 
