@@ -10,7 +10,7 @@ Add the SDK dependency in your Android app module:
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.4")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.5")
 }
 ```
 
