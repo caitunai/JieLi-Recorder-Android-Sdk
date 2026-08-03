@@ -9,7 +9,9 @@
 - 扫描结果回调
 - 电量变化回调
 - 文件列表读取与刷新
-- 文件下载、下载进度与下载统计
+- raw Opus 自动转换并封装为 OGG Opus 文件
+- raw Opus 原始文件下载与断点续传
+- 文件下载进度、统计、取消与输出路径回调
 - 文件删除
 - 设备时间同步
 - 自定义录音开始与停止
@@ -28,7 +30,7 @@ SDK 依赖已经迁移到 Maven。
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.6")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.7")
 }
 ```
 
@@ -335,6 +337,8 @@ override fun onFilesRetrieved(files: List<BLEFile>) {
 
 ## 11. 文件下载
 
+### 下载并转换为 OGG Opus
+
 按文件名下载：
 
 ```kotlin
@@ -345,12 +349,61 @@ bleManager?.downloadFile(device, filename)
 
 ```kotlin
 bleManager?.downloadFileToPath(
-    device = device,
-    filename = filename,
-    path = File(cacheDir, filename).absolutePath,
-    offset = 256
+    device,
+    filename,
+    File(cacheDir, filename).absolutePath,
+    256L
 )
 ```
+
+以上已有接口保持原有行为：SDK 接收录音设备中的 raw Opus 数据，并自动
+转换、封装为 OGG Opus 文件。
+
+### 下载 raw Opus 原始文件
+
+如果应用需要保存设备中的原始字节数据，请使用 `downloadRawFile()`。
+`resumeOffset` 传入 `0` 表示重新下载：
+
+```kotlin
+val rawFile = File(cacheDir, "raw_$filename")
+
+bleManager?.downloadRawFile(
+    device,
+    filename,
+    rawFile.absolutePath,
+    0L
+)
+```
+
+原始文件下载会直接写入 `outputPath`，不会经过 Opus 转 OGG 转码程序。
+
+### raw Opus 断点续传
+
+取消、断线或下载异常后保留本地部分文件，并将文件当前长度作为
+`resumeOffset`：
+
+```kotlin
+val rawFile = File(cacheDir, "raw_$filename")
+val resumeOffset = rawFile.takeIf { it.exists() }?.length() ?: 0L
+
+bleManager?.downloadRawFile(
+    device,
+    filename,
+    rawFile.absolutePath,
+    resumeOffset
+)
+```
+
+续传要求和处理规则：
+
+- 必须继续使用同一个本地输出文件。
+- `resumeOffset` 的有效范围为 `0` 到 `Integer.MAX_VALUE`。
+- 偏移大于 0 时，本地文件必须存在，且长度不能小于该偏移。
+- 本地文件长度大于指定偏移时，SDK 会先截断到该偏移再追加数据。
+- SDK 会把同一个偏移发送给录音设备，保证远端读取位置和本地写入位置一致。
+- 同一时间只允许执行一个文件下载任务。
+- 如果本地文件长度已经等于远端 `BLEFile.size`，应用应直接按已完成处理，
+  不要再次发起下载。
 
 下载回调事件：
 
@@ -377,16 +430,46 @@ override fun onFileDownloadUpdate(device: BLEDevice, event: BLEFileDownloadEvent
 
 下载完成后可获取：
 
+- `file`
 - `packages`
 - `bytesCount`
 - `duration`
 - `path`
+- `rawFile`
+- `resumeOffset`
+
+原始文件下载事件的 `rawFile` 为 `true`，`resumeOffset` 表示本次传输请求的
+起始字节偏移。
+
+对于断点续传，`bytesCount` 表示本次请求新接收的字节数，总完成长度为：
+
+```kotlin
+val completedBytes = event.resumeOffset + event.bytesCount.toLong()
+```
 
 ### 取消下载
 
 ```kotlin
 bleManager?.cancelDownloadFile(device)
 ```
+
+PNote 设备建议传入当前正在下载的文件名：
+
+```kotlin
+bleManager?.cancelDownloadFile(device, filename)
+```
+
+点击取消后，SDK 会立即丢弃随后收到的文件数据，使本地部分文件可以继续
+用于断点续传。SDK 等待 PNote 外设确认取消；800ms 内没有收到确认时会
+自动重发取消命令，最多重试 3 次。
+
+PNote 下载相关终止错误码：
+
+- `1008`：本地原始文件写入失败，SDK 同时执行取消重试流程。
+- `1009`：取消命令全部重试后仍然超时。
+- `1010`：外设没有确认取消，但已经将文件传输完成。
+- `1011`：上一次取消超时的传输可能仍在发送数据。SDK 会阻止新下载，
+  直到收到迟到的终止状态，或者设备断开并重新连接。
 
 ## 12. 文件分享
 
@@ -734,6 +817,8 @@ override fun onUpgradeUnfinished(device: BLEDevice) {
 - 多设备场景下按 MAC 过滤设备相关回调
 - 文件完整刷新优先使用 `retrieveFilesFromStart()`
 - 下载完成后优先使用 `BLEFileDownloadEvent.path`
+- 原始文件未下载完成时保留本地文件，下次将文件长度传给 `downloadRawFile()` 续传
+- PNote 下载返回 `1011` 后不要立即重新下载，应等待终止状态或重新连接设备
 - 实时 PCM 音频请保持单独的输出流，并在 `onRealtimeAudioStopped()` 后统一关闭
 - 分享下载文件或实时音频文件时统一使用 `FileProvider`
 

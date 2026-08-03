@@ -10,7 +10,7 @@ Add the SDK dependency in your Android app module:
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.6")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.7")
 }
 ```
 
@@ -42,7 +42,9 @@ import com.jieli.sdk.ble.recorder.ConnectionCode
 - Device information reporting during scan
 - Battery status update callbacks
 - Recorder file listing and refresh
-- File download with progress, statistics, and output path
+- OGG Opus download with automatic raw Opus transcoding
+- Raw Opus download with resumable transfer support
+- File download progress, statistics, cancellation, and output path reporting
 - File deletion for one or multiple files
 - Device time synchronization
 - Custom record start and stop commands
@@ -316,6 +318,8 @@ override fun onFilesRetrieved(files: List<BLEFile>) {
 
 ## Download Files
 
+### Download and convert to OGG Opus
+
 Download by filename:
 
 ```kotlin
@@ -326,12 +330,64 @@ Download to a custom path:
 
 ```kotlin
 bleManager?.downloadFileToPath(
-    device = device,
-    filename = filename,
-    path = File(cacheDir, filename).absolutePath,
-    offset = 256
+    device,
+    filename,
+    File(cacheDir, filename).absolutePath,
+    256L
 )
 ```
+
+These existing APIs keep their original behavior: raw Opus bytes received from
+the recorder are transcoded and wrapped as an OGG Opus file.
+
+### Download the original raw Opus file
+
+Use `downloadRawFile()` when the app needs the exact raw bytes stored on the
+recorder. Pass `0` as the offset to start a new download:
+
+```kotlin
+val rawFile = File(cacheDir, "raw_$filename")
+
+bleManager?.downloadRawFile(
+    device,
+    filename,
+    rawFile.absolutePath,
+    0L
+)
+```
+
+The raw download path writes bytes directly to `outputPath` and does not invoke
+the Opus-to-OGG transcoder.
+
+### Resume a partial raw download
+
+Keep the partial file and use its current length as `resumeOffset`:
+
+```kotlin
+val rawFile = File(cacheDir, "raw_$filename")
+val resumeOffset = rawFile.takeIf { it.exists() }?.length() ?: 0L
+
+bleManager?.downloadRawFile(
+    device,
+    filename,
+    rawFile.absolutePath,
+    resumeOffset
+)
+```
+
+Resume requirements and behavior:
+
+- Reuse the same local output file.
+- `resumeOffset` must be between `0` and `Integer.MAX_VALUE`.
+- For an offset greater than zero, the local file must exist and contain at
+  least that many bytes.
+- If the local file is longer than the requested offset, the SDK truncates it
+  to the offset before appending.
+- The SDK requests the same offset from the recorder, so the remote and local
+  positions stay aligned.
+- Only one file download can be active at a time.
+- If the local length already equals the remote `BLEFile.size`, the app should
+  treat the file as complete instead of starting another transfer.
 
 Download callback events:
 
@@ -358,16 +414,49 @@ override fun onFileDownloadUpdate(device: BLEDevice, event: BLEFileDownloadEvent
 
 Available download statistics on finish:
 
+- `file`
 - `packages`
 - `bytesCount`
 - `duration`
 - `path`
+- `rawFile`
+- `resumeOffset`
+
+`rawFile` is `true` for an original raw download, and `resumeOffset` is the
+starting byte offset requested for that transfer.
+
+For a resumed raw download, `bytesCount` is the number of bytes received during
+the current request. The total completed length is:
+
+```kotlin
+val completedBytes = event.resumeOffset + event.bytesCount.toLong()
+```
 
 ## Cancel Download
 
 ```kotlin
 bleManager?.cancelDownloadFile(device)
 ```
+
+For PNote devices, passing the active filename is recommended:
+
+```kotlin
+bleManager?.cancelDownloadFile(device, filename)
+```
+
+After a local cancellation request, newly arriving file data is discarded
+immediately, so the partial file remains usable for resume. The SDK waits 800 ms
+for the PNote acknowledgement and retries the cancel command up to three times.
+
+PNote-specific terminal errors:
+
+- `1008`: writing the local raw file failed; the SDK also runs the cancel retry
+  sequence.
+- `1009`: all cancel attempts timed out.
+- `1010`: the peripheral finished the transfer without acknowledging cancel.
+- `1011`: a previous timed-out transfer may still be sending data. New downloads
+  are blocked until a late terminal state arrives or the device disconnects and
+  reconnects.
 
 ## Share Downloaded Files
 
@@ -719,6 +808,9 @@ override fun onUpgradeUnfinished(device: BLEDevice) {
 - Filter device-specific callbacks by MAC when needed
 - Prefer `retrieveFilesFromStart()` for a full refresh
 - Use `BLEFileDownloadEvent.path` after download completion
+- Keep an incomplete raw file and pass its length to `downloadRawFile()` to resume
+- Do not start a new PNote download after error `1011`; wait for a terminal state
+  or reconnect the device
 - Keep a dedicated output stream for realtime PCM audio until `onRealtimeAudioStopped()`
 - Use `FileProvider` for sharing downloaded or realtime-generated files
 
