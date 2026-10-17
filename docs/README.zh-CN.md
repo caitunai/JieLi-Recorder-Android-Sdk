@@ -19,7 +19,7 @@
 - 按键/触控行为设置与软触发
 - 实时 PCM 音频流回调
 - OTA 升级
-- 设备绑定与验证（HMAC-SHA256）
+- 设备绑定与验证（HMAC-SHA256）、设备解绑
 - 错误与升级未完成提醒
 
 ## 1. Maven 依赖
@@ -30,7 +30,7 @@ SDK 依赖已经迁移到 Maven。
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.7")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.9")
 }
 ```
 
@@ -731,7 +731,7 @@ override fun onOTAUpdate(device: BLEDevice, event: BLEOTAEvent) {
 }
 ```
 
-## 21. 设备绑定与验证
+## 21. 设备绑定、验证与解绑
 
 SDK 支持通过 HMAC-SHA256 算法进行设备绑定验证，确保连接的设备身份合法。
 
@@ -769,6 +769,28 @@ val key = "your-secret-key".toByteArray(Charsets.UTF_8)
 bleManager?.verifyDeviceBinding(device, key)
 ```
 
+### 解绑设备（自 1.0.9 起支持）
+
+对当前已连接的 PNote 设备调用 `unbindDevice()`，请求解除设备绑定：
+
+```kotlin
+bleManager?.unbindDevice(device)
+```
+
+Java 方法签名为 `public void unbindDevice(BLEDevice device)`。传入的设备
+必须非空且已经连接；当前实现通过 PNote 设备路径发送解绑命令。
+
+该方法没有直接返回结果，应等待
+`onDeviceBindingStateChanged(device, state)` 回调后再更新界面：
+
+- `UNBOUND`：外设确认解绑成功。
+- `UNKNOWN`：外设报告解绑请求未成功，不能据此视为已解绑；可以调用
+  `getDeviceBindingState(device)` 查询当前绑定状态。
+
+查询绑定状态也可能返回 `UNBOUND`。如果界面需要区分查询结果和解绑结果，
+请记录当前等待完成的操作。解绑后需要重新绑定时，再调用
+`bindOrVerifyDevice(device, key)`。
+
 ### 绑定状态变更回调
 
 ```kotlin
@@ -790,6 +812,7 @@ override fun onDeviceBindingStateChanged(device: BLEDevice, state: BLEDeviceBind
 1. **首次连接设备**：调用 `bindOrVerifyDevice()` 设置绑定密钥
 2. **后续连接验证**：调用 `verifyDeviceBinding()` 验证设备身份
 3. **状态监控**：通过 `onDeviceBindingStateChanged()` 监听绑定状态变化
+4. **设备解绑**：对已连接的 PNote 设备调用 `unbindDevice()`，并等待解绑结果回调
 
 ## 22. 错误处理
 

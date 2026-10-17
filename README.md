@@ -10,7 +10,7 @@ Add the SDK dependency in your Android app module:
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.7")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.9")
 }
 ```
 
@@ -52,7 +52,7 @@ import com.jieli.sdk.ble.recorder.ConnectionCode
 - Key/touch behavior configuration and software trigger
 - Realtime PCM audio callbacks
 - OTA firmware upgrade
-- Device binding and verification (HMAC-SHA256)
+- Device binding and verification (HMAC-SHA256), and device unbinding
 - Generic SDK error reporting
 
 ## Required Permissions
@@ -722,7 +722,7 @@ override fun onOTAUpdate(device: BLEDevice, event: BLEOTAEvent) {
 }
 ```
 
-## Device Binding and Verification
+## Device Binding, Verification, and Unbinding
 
 The SDK supports device binding verification using HMAC-SHA256 algorithm to ensure the connected device is authentic.
 
@@ -760,6 +760,31 @@ val key = "your-secret-key".toByteArray(Charsets.UTF_8)
 bleManager?.verifyDeviceBinding(device, key)
 ```
 
+### Unbind Device (Since 1.0.9)
+
+Call `unbindDevice()` with the connected PNote device to request unbinding:
+
+```kotlin
+bleManager?.unbindDevice(device)
+```
+
+The Java API is `public void unbindDevice(BLEDevice device)`. Pass a non-null,
+connected device. The current implementation delegates to the PNote device
+path.
+
+This method returns no result directly. Wait for
+`onDeviceBindingStateChanged(device, state)` before updating the UI:
+
+- `UNBOUND`: the peripheral confirmed successful unbinding.
+- `UNKNOWN`: the peripheral reported that the unbind request was unsuccessful;
+  do not treat the device as unbound. Query `getDeviceBindingState(device)` to
+  check its current binding state.
+
+`UNBOUND` can also be returned by a binding-state query, so track the pending
+operation if the UI needs to distinguish an unbind result from a query result.
+After unbinding, use `bindOrVerifyDevice(device, key)` when binding the device
+again.
+
 ### Binding State Change Callback
 
 ```kotlin
@@ -781,6 +806,7 @@ override fun onDeviceBindingStateChanged(device: BLEDevice, state: BLEDeviceBind
 1. **First connection**: Call `bindOrVerifyDevice()` to set the binding key
 2. **Subsequent connections**: Call `verifyDeviceBinding()` to authenticate the device
 3. **State monitoring**: Listen to `onDeviceBindingStateChanged()` for binding state changes
+4. **Unbinding**: Call `unbindDevice()` for the connected PNote device and wait for the unbinding result callback
 
 ## Errors
 
