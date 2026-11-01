@@ -30,7 +30,7 @@ SDK 依赖已经迁移到 Maven。
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.9")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.10")
 }
 ```
 
@@ -132,7 +132,7 @@ void onFileDownloadUpdate(BLEDevice device, BLEFileDownloadEvent event);
 void onFileDeleteUpdate(BLEDevice device, BLEFileDeleteEvent event);
 void onOTAUpdate(BLEDevice device, BLEOTAEvent event);
 void onRecordStateUpdate(BLEDevice device, BLERecordState state);
-void onStorageSizeUpdate(BLEDevice device, int available, int total);
+void onStorageSizeUpdate(BLEDevice device, long available, long total);
 void onRecordFilesCountUpdate(BLEDevice device, int fileCount);
 void onKeyTouchBehaviorUpdate(BLEDevice device, boolean isSuccess, String errorMessage);
 void onKeyTouchEmitted(BLEDevice device, boolean isSuccess);
