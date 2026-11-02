@@ -1,3 +1,5 @@
+![AI Recorders](/assets/recorders.webp)
+
 # JieLi Recorder Android SDK
 
 Android BLE recorder SDK for scanning devices, connecting to peripherals, browsing recorder files, downloading and deleting files, sending custom record commands, querying device state, configuring key/touch behavior, receiving realtime PCM audio, and performing OTA upgrades.
