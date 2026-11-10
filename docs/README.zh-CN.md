@@ -30,7 +30,7 @@ SDK 依赖已经迁移到 Maven。
 
 ```kotlin
 dependencies {
-    implementation("com.caitun.ble:jieli-ble-recorder:1.0.10")
+    implementation("com.caitun.ble:jieli-ble-recorder:1.0.11")
 }
 ```
 
